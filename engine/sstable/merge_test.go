@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/thomazdavis/stratago/memtable"
+	"github.com/thomazdavis/stratago-dist/engine/memtable"
 )
 
 func buildTestSSTable(filename string, kvs map[string]string) *Reader {

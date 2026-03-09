@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/thomazdavis/stratago/memtable"
-	"github.com/thomazdavis/stratago/sstable"
-	"github.com/thomazdavis/stratago/wal"
+	"github.com/thomazdavis/stratago-dist/engine/memtable"
+	"github.com/thomazdavis/stratago-dist/engine/sstable"
+	"github.com/thomazdavis/stratago-dist/engine/wal"
 )
 
 func (db *StrataGo) Flush() error {

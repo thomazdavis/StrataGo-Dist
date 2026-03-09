@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/thomazdavis/stratago/memtable"
+	"github.com/thomazdavis/stratago-dist/engine/memtable"
 )
 
 const IndexInterval = 1024

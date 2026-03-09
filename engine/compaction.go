@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/thomazdavis/stratago/sstable"
+	"github.com/thomazdavis/stratago-dist/engine/sstable"
 )
 
 const CompactionThreshold = 4

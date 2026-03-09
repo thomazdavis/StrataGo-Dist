@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Node 1 (Leader)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["--node-id=node1", "--raft-port=7001", "--grpc-port=8001"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Launch Node 2 (Follower)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["--node-id=node2", "--raft-port=7002", "--grpc-port=8002", "--join-addr=localhost:7001"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Launch Node 3 (Follower)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["--node-id=node3", "--raft-port=7003", "--grpc-port=8003", "--join-addr=localhost:7001"],
+            "env": {},
+            "showLog": true
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Launch Cluster (3 Nodes)",
+            "configurations": ["Launch Node 1 (Leader)", "Launch Node 2 (Follower)", "Launch Node 3 (Follower)"]
+        }
+    ]
+}

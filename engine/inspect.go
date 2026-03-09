@@ -1,6 +1,6 @@
 package stratago
 
-import "github.com/thomazdavis/stratago/wal"
+import "github.com/thomazdavis/stratago-dist/engine/wal"
 
 func (db *StrataGo) GetWAL() *wal.WAL {
 	db.mu.RLock()

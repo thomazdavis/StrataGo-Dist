@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Go Binaries
+main
+stratago-dist
+
+# Database and Raft Data Directories
+node*/
+data/
+*.sst
+*.log
+*.tmp.*
