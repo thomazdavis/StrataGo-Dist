@@ -2,17 +2,16 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v7.34.0
-// source: proto/kv.proto
+// source: kv.proto
 
 package gen
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -22,13 +21,16 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// The Tunable Consistency Model
+// ConsistencyLevel dictates the strictness of the read operation
 type GetRequest_ConsistencyLevel int32
 
 const (
-	GetRequest_STRONG   GetRequest_ConsistencyLevel = 0 // Requires Quorum check (VerifyLeader). Slow but guaranteed safe.
-	GetRequest_FAST     GetRequest_ConsistencyLevel = 1 // Uses Leader Leases. Fast, relies on bounded clock drift.
-	GetRequest_EVENTUAL GetRequest_ConsistencyLevel = 2 // Reads from any follower node. Fastest, but might return stale data.
+	// STRONG requires a quorum check Slow but guaranteed safe against network partitions
+	GetRequest_STRONG GetRequest_ConsistencyLevel = 0
+	// FAST utilizes Leader Leases Served locally by the leader; fast but relies on bounded clock drift
+	GetRequest_FAST GetRequest_ConsistencyLevel = 1
+	// EVENTUAL allows reads from follower nodes Maximum throughput, but risks returning stale data
+	GetRequest_EVENTUAL GetRequest_ConsistencyLevel = 2
 )
 
 // Enum value maps for GetRequest_ConsistencyLevel.
@@ -56,11 +58,11 @@ func (x GetRequest_ConsistencyLevel) String() string {
 }
 
 func (GetRequest_ConsistencyLevel) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_kv_proto_enumTypes[0].Descriptor()
+	return file_kv_proto_enumTypes[0].Descriptor()
 }
 
 func (GetRequest_ConsistencyLevel) Type() protoreflect.EnumType {
-	return &file_proto_kv_proto_enumTypes[0]
+	return &file_kv_proto_enumTypes[0]
 }
 
 func (x GetRequest_ConsistencyLevel) Number() protoreflect.EnumNumber {
@@ -69,20 +71,23 @@ func (x GetRequest_ConsistencyLevel) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use GetRequest_ConsistencyLevel.Descriptor instead.
 func (GetRequest_ConsistencyLevel) EnumDescriptor() ([]byte, []int) {
-	return file_proto_kv_proto_rawDescGZIP(), []int{2, 0}
+	return file_kv_proto_rawDescGZIP(), []int{2, 0}
 }
 
+// PutRequest contains the key and value to be stored
 type PutRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The key to store
+	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// The value payload
+	Value         []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PutRequest) Reset() {
 	*x = PutRequest{}
-	mi := &file_proto_kv_proto_msgTypes[0]
+	mi := &file_kv_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -94,7 +99,7 @@ func (x *PutRequest) String() string {
 func (*PutRequest) ProtoMessage() {}
 
 func (x *PutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kv_proto_msgTypes[0]
+	mi := &file_kv_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -107,7 +112,7 @@ func (x *PutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutRequest.ProtoReflect.Descriptor instead.
 func (*PutRequest) Descriptor() ([]byte, []int) {
-	return file_proto_kv_proto_rawDescGZIP(), []int{0}
+	return file_kv_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *PutRequest) GetKey() string {
@@ -124,11 +129,14 @@ func (x *PutRequest) GetValue() []byte {
 	return nil
 }
 
+// PutResponse indicates the result of a Put operation
 type PutResponse struct {
-	state   protoimpl.MessageState `protogen:"open.v1"`
-	Success bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Message string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	// If not leader, tell the client who the leader actually is
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// True if the operation was successfully committed
+	Success bool `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	// Optional message, typically containing an error description if success is false
+	Message string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	// The address of the current leader, provided if the receiving node is a follower
 	LeaderAddress string `protobuf:"bytes,3,opt,name=leader_address,json=leaderAddress,proto3" json:"leader_address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -136,7 +144,7 @@ type PutResponse struct {
 
 func (x *PutResponse) Reset() {
 	*x = PutResponse{}
-	mi := &file_proto_kv_proto_msgTypes[1]
+	mi := &file_kv_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -148,7 +156,7 @@ func (x *PutResponse) String() string {
 func (*PutResponse) ProtoMessage() {}
 
 func (x *PutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kv_proto_msgTypes[1]
+	mi := &file_kv_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -161,7 +169,7 @@ func (x *PutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutResponse.ProtoReflect.Descriptor instead.
 func (*PutResponse) Descriptor() ([]byte, []int) {
-	return file_proto_kv_proto_rawDescGZIP(), []int{1}
+	return file_kv_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *PutResponse) GetSuccess() bool {
@@ -185,9 +193,12 @@ func (x *PutResponse) GetLeaderAddress() string {
 	return ""
 }
 
+// GetRequest contains the key to retrieve and the desired consistency level
 type GetRequest struct {
-	state         protoimpl.MessageState      `protogen:"open.v1"`
-	Key           string                      `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The key to look up
+	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// The consistency level requested by the client
 	Consistency   GetRequest_ConsistencyLevel `protobuf:"varint,2,opt,name=consistency,proto3,enum=kv.GetRequest_ConsistencyLevel" json:"consistency,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -195,7 +206,7 @@ type GetRequest struct {
 
 func (x *GetRequest) Reset() {
 	*x = GetRequest{}
-	mi := &file_proto_kv_proto_msgTypes[2]
+	mi := &file_kv_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -207,7 +218,7 @@ func (x *GetRequest) String() string {
 func (*GetRequest) ProtoMessage() {}
 
 func (x *GetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kv_proto_msgTypes[2]
+	mi := &file_kv_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -220,7 +231,7 @@ func (x *GetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRequest.ProtoReflect.Descriptor instead.
 func (*GetRequest) Descriptor() ([]byte, []int) {
-	return file_proto_kv_proto_rawDescGZIP(), []int{2}
+	return file_kv_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *GetRequest) GetKey() string {
@@ -237,18 +248,22 @@ func (x *GetRequest) GetConsistency() GetRequest_ConsistencyLevel {
 	return GetRequest_STRONG
 }
 
+// GetResponse contains the value retrieved from the database
 type GetResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Found         bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
-	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	LeaderAddress string                 `protobuf:"bytes,3,opt,name=leader_address,json=leaderAddress,proto3" json:"leader_address,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// True if the key was found in the database
+	Found bool `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
+	// The retrieved value, if found
+	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	// The address of the current leader
+	LeaderAddress string `protobuf:"bytes,3,opt,name=leader_address,json=leaderAddress,proto3" json:"leader_address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetResponse) Reset() {
 	*x = GetResponse{}
-	mi := &file_proto_kv_proto_msgTypes[3]
+	mi := &file_kv_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -260,7 +275,7 @@ func (x *GetResponse) String() string {
 func (*GetResponse) ProtoMessage() {}
 
 func (x *GetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kv_proto_msgTypes[3]
+	mi := &file_kv_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -273,7 +288,7 @@ func (x *GetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetResponse.ProtoReflect.Descriptor instead.
 func (*GetResponse) Descriptor() ([]byte, []int) {
-	return file_proto_kv_proto_rawDescGZIP(), []int{3}
+	return file_kv_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetResponse) GetFound() bool {
@@ -297,16 +312,18 @@ func (x *GetResponse) GetLeaderAddress() string {
 	return ""
 }
 
+// DeleteRequest contains the key to be removed
 type DeleteRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The key to delete
+	Key           string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeleteRequest) Reset() {
 	*x = DeleteRequest{}
-	mi := &file_proto_kv_proto_msgTypes[4]
+	mi := &file_kv_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -318,7 +335,7 @@ func (x *DeleteRequest) String() string {
 func (*DeleteRequest) ProtoMessage() {}
 
 func (x *DeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kv_proto_msgTypes[4]
+	mi := &file_kv_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -331,7 +348,7 @@ func (x *DeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRequest) Descriptor() ([]byte, []int) {
-	return file_proto_kv_proto_rawDescGZIP(), []int{4}
+	return file_kv_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DeleteRequest) GetKey() string {
@@ -341,17 +358,20 @@ func (x *DeleteRequest) GetKey() string {
 	return ""
 }
 
+// DeleteResponse indicates the result of a Delete operation
 type DeleteResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	LeaderAddress string                 `protobuf:"bytes,2,opt,name=leader_address,json=leaderAddress,proto3" json:"leader_address,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// True if the deletion was successfully committed
+	Success bool `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	// The address of the current leader, provided if the receiving node is a follower
+	LeaderAddress string `protobuf:"bytes,2,opt,name=leader_address,json=leaderAddress,proto3" json:"leader_address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeleteResponse) Reset() {
 	*x = DeleteResponse{}
-	mi := &file_proto_kv_proto_msgTypes[5]
+	mi := &file_kv_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -363,7 +383,7 @@ func (x *DeleteResponse) String() string {
 func (*DeleteResponse) ProtoMessage() {}
 
 func (x *DeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kv_proto_msgTypes[5]
+	mi := &file_kv_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -376,7 +396,7 @@ func (x *DeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteResponse.ProtoReflect.Descriptor instead.
 func (*DeleteResponse) Descriptor() ([]byte, []int) {
-	return file_proto_kv_proto_rawDescGZIP(), []int{5}
+	return file_kv_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DeleteResponse) GetSuccess() bool {
@@ -393,11 +413,11 @@ func (x *DeleteResponse) GetLeaderAddress() string {
 	return ""
 }
 
-var File_proto_kv_proto protoreflect.FileDescriptor
+var File_kv_proto protoreflect.FileDescriptor
 
-const file_proto_kv_proto_rawDesc = "" +
+const file_kv_proto_rawDesc = "" +
 	"\n" +
-	"\x0eproto/kv.proto\x12\x02kv\"4\n" +
+	"\bkv.proto\x12\x02kv\"4\n" +
 	"\n" +
 	"PutRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -427,34 +447,32 @@ const file_proto_kv_proto_rawDesc = "" +
 	"\aKVStore\x12(\n" +
 	"\x03Put\x12\x0e.kv.PutRequest\x1a\x0f.kv.PutResponse\"\x00\x12(\n" +
 	"\x03Get\x12\x0e.kv.GetRequest\x1a\x0f.kv.GetResponse\"\x00\x121\n" +
-	"\x06Delete\x12\x11.kv.DeleteRequest\x1a\x12.kv.DeleteResponse\"\x00B8Z6github.com/yourusername/stratago-distributed/proto/genb\x06proto3"
+	"\x06Delete\x12\x11.kv.DeleteRequest\x1a\x12.kv.DeleteResponse\"\x00B0Z.github.com/thomazdavis/stratago-dist/proto/genb\x06proto3"
 
 var (
-	file_proto_kv_proto_rawDescOnce sync.Once
-	file_proto_kv_proto_rawDescData []byte
+	file_kv_proto_rawDescOnce sync.Once
+	file_kv_proto_rawDescData []byte
 )
 
-func file_proto_kv_proto_rawDescGZIP() []byte {
-	file_proto_kv_proto_rawDescOnce.Do(func() {
-		file_proto_kv_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_kv_proto_rawDesc), len(file_proto_kv_proto_rawDesc)))
+func file_kv_proto_rawDescGZIP() []byte {
+	file_kv_proto_rawDescOnce.Do(func() {
+		file_kv_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_kv_proto_rawDesc), len(file_kv_proto_rawDesc)))
 	})
-	return file_proto_kv_proto_rawDescData
+	return file_kv_proto_rawDescData
 }
 
-var (
-	file_proto_kv_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-	file_proto_kv_proto_msgTypes  = make([]protoimpl.MessageInfo, 6)
-	file_proto_kv_proto_goTypes   = []any{
-		(GetRequest_ConsistencyLevel)(0), // 0: kv.GetRequest.ConsistencyLevel
-		(*PutRequest)(nil),               // 1: kv.PutRequest
-		(*PutResponse)(nil),              // 2: kv.PutResponse
-		(*GetRequest)(nil),               // 3: kv.GetRequest
-		(*GetResponse)(nil),              // 4: kv.GetResponse
-		(*DeleteRequest)(nil),            // 5: kv.DeleteRequest
-		(*DeleteResponse)(nil),           // 6: kv.DeleteResponse
-	}
-)
-var file_proto_kv_proto_depIdxs = []int32{
+var file_kv_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_kv_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_kv_proto_goTypes = []any{
+	(GetRequest_ConsistencyLevel)(0), // 0: kv.GetRequest.ConsistencyLevel
+	(*PutRequest)(nil),               // 1: kv.PutRequest
+	(*PutResponse)(nil),              // 2: kv.PutResponse
+	(*GetRequest)(nil),               // 3: kv.GetRequest
+	(*GetResponse)(nil),              // 4: kv.GetResponse
+	(*DeleteRequest)(nil),            // 5: kv.DeleteRequest
+	(*DeleteResponse)(nil),           // 6: kv.DeleteResponse
+}
+var file_kv_proto_depIdxs = []int32{
 	0, // 0: kv.GetRequest.consistency:type_name -> kv.GetRequest.ConsistencyLevel
 	1, // 1: kv.KVStore.Put:input_type -> kv.PutRequest
 	3, // 2: kv.KVStore.Get:input_type -> kv.GetRequest
@@ -469,27 +487,27 @@ var file_proto_kv_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_proto_kv_proto_init() }
-func file_proto_kv_proto_init() {
-	if File_proto_kv_proto != nil {
+func init() { file_kv_proto_init() }
+func file_kv_proto_init() {
+	if File_kv_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_kv_proto_rawDesc), len(file_proto_kv_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kv_proto_rawDesc), len(file_kv_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_proto_kv_proto_goTypes,
-		DependencyIndexes: file_proto_kv_proto_depIdxs,
-		EnumInfos:         file_proto_kv_proto_enumTypes,
-		MessageInfos:      file_proto_kv_proto_msgTypes,
+		GoTypes:           file_kv_proto_goTypes,
+		DependencyIndexes: file_kv_proto_depIdxs,
+		EnumInfos:         file_kv_proto_enumTypes,
+		MessageInfos:      file_kv_proto_msgTypes,
 	}.Build()
-	File_proto_kv_proto = out.File
-	file_proto_kv_proto_goTypes = nil
-	file_proto_kv_proto_depIdxs = nil
+	File_kv_proto = out.File
+	file_kv_proto_goTypes = nil
+	file_kv_proto_depIdxs = nil
 }

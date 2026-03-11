@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             v7.34.0
-// source: proto/kv.proto
+// source: kv.proto
 
 package gen
 
@@ -27,9 +27,14 @@ const (
 // KVStoreClient is the client API for KVStore service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// KVStore defines the gRPC service for the distributed key-value database
 type KVStoreClient interface {
+	// Put inserts or updates a key-value pair in the database
 	Put(ctx context.Context, in *PutRequest, opts ...grpc.CallOption) (*PutResponse, error)
+	// Get retrieves a value by its key, subject to the requested consistency level
 	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
+	// Delete removes a key-value pair from the database
 	Delete(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
 }
 
@@ -74,9 +79,14 @@ func (c *kVStoreClient) Delete(ctx context.Context, in *DeleteRequest, opts ...g
 // KVStoreServer is the server API for KVStore service.
 // All implementations must embed UnimplementedKVStoreServer
 // for forward compatibility.
+//
+// KVStore defines the gRPC service for the distributed key-value database
 type KVStoreServer interface {
+	// Put inserts or updates a key-value pair in the database
 	Put(context.Context, *PutRequest) (*PutResponse, error)
+	// Get retrieves a value by its key, subject to the requested consistency level
 	Get(context.Context, *GetRequest) (*GetResponse, error)
+	// Delete removes a key-value pair from the database
 	Delete(context.Context, *DeleteRequest) (*DeleteResponse, error)
 	mustEmbedUnimplementedKVStoreServer()
 }
@@ -193,5 +203,5 @@ var KVStore_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/kv.proto",
+	Metadata: "kv.proto",
 }

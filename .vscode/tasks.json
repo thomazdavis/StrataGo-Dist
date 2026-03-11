@@ -4,7 +4,7 @@
         {
             "label": "Compile Protobuf",
             "type": "shell",
-            "command": "protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/kv.proto",
+            "command": "mkdir -p proto/gen && protoc -I=proto --go_out=proto/gen --go_opt=paths=source_relative --go-grpc_out=proto/gen --go-grpc_opt=paths=source_relative kv.proto",
             "group": {
                 "kind": "build",
                 "isDefault": true

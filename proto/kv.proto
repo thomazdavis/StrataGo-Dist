@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package kv;
 
-option go_package = "githubcom/thomazdavis/stratago-dist/proto/gen";
+option go_package = "github.com/thomazdavis/stratago-dist/proto/gen";
 
 // KVStore defines the gRPC service for the distributed key-value database
 service KVStore {
