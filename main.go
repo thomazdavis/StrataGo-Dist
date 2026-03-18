@@ -7,8 +7,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -121,7 +123,33 @@ func main() {
 	fmt.Printf("\n Node '%s' is LIVE\n", *nodeID)
 	fmt.Printf("   Raft Port: %d | gRPC Port: %d | Admin Port: %d\n\n", *raftPort, *grpcPort, httpPort)
 
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("gRPC Server crashed: %v", err)
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("gRPC Server crashed: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit // Block main thread here until signal is received
+
+	fmt.Printf("\n[%s] Shutting down server...\n", *nodeID)
+
+	// Stop accepting new public network traffic
+	grpcServer.GracefulStop()
+
+	// Close cached proxy connections
+	kvServer.Close()
+
+	// Safely step down from Raft leadership and close internal network
+	if future := raftNode.Shutdown(); future.Error() != nil {
+		fmt.Printf("Error shutting down Raft: %v\n", future.Error())
 	}
+
+	// Flush the active Memtable to disk and safely close the storage engine
+	if err := db.Close(); err != nil {
+		fmt.Printf("Error closing database: %v\n", err)
+	}
+
+	fmt.Printf("[%s] Server safely stopped.\n", *nodeID)
 }
