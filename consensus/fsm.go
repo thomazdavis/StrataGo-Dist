@@ -42,20 +42,49 @@ func (f *StrataFSM) Apply(l *raft.Log) interface{} {
 
 // Snapshot is called to support log compaction
 func (f *StrataFSM) Snapshot() (raft.FSMSnapshot, error) {
-	return &dummySnapshot{}, nil
+	state, err := f.db.ScanAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan database for snapshot: %w", err)
+	}
+
+	return &strataSnapshot{state: state}, nil
 }
 
 // Restore is used when a node wakes up and needs to load a snapshot to catch up.
 func (f *StrataFSM) Restore(rc io.ReadCloser) error {
 	defer rc.Close()
+
+	// Pass the network stream directly to the engine to wipe and reload
+	if err := f.db.ClearAndLoad(rc); err != nil {
+		return fmt.Errorf("failed to restore from snapshot: %w", err)
+	}
+
 	return nil
 }
 
-type dummySnapshot struct{}
-
-func (s *dummySnapshot) Persist(sink raft.SnapshotSink) error {
-	sink.Write([]byte("dummy"))
-	return sink.Close()
+type strataSnapshot struct {
+	state map[string][]byte
 }
 
-func (s *dummySnapshot) Release() {}
+// Persist is called by a background Raft goroutine
+// It encodes our map into a byte stream and writes it to the hard drive (snapshotStore)
+func (s *strataSnapshot) Persist(sink raft.SnapshotSink) error {
+	err := func() error {
+		// Encode the in-memory map to JSON directly into the file sink
+		encoder := json.NewEncoder(sink)
+		if err := encoder.Encode(s.state); err != nil {
+			return err
+		}
+		return sink.Close()
+	}()
+	if err != nil {
+		sink.Cancel() // Tell Raft the snapshot failed so it doesn't delete the logs
+		return err
+	}
+
+	return nil
+}
+
+// Release is called when Raft is done with the snapshot.
+// We let the Go garbage collector handle the map, so we do nothing
+func (s *strataSnapshot) Release() {}

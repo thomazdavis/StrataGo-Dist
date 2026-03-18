@@ -1,7 +1,9 @@
 package stratago
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -34,7 +36,7 @@ type sstableInfo struct {
 }
 
 func Open(dataDir string) (*StrataGo, error) {
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, err
 	}
 
@@ -124,7 +126,6 @@ func Open(dataDir string) (*StrataGo, error) {
 }
 
 func (db *StrataGo) Put(key, value []byte) error {
-
 	db.mu.Lock()
 	if db.closed {
 		db.mu.Unlock()
@@ -188,7 +189,6 @@ func (db *StrataGo) Get(key []byte) ([]byte, bool) {
 
 // Delete marks a key as deleted by inserting a tombstone
 func (db *StrataGo) Delete(key []byte) error {
-
 	db.mu.Lock()
 	if db.closed {
 		db.mu.Unlock()
@@ -260,7 +260,7 @@ func (db *StrataGo) Purge() error {
 	if err := os.RemoveAll(db.dataDir); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(db.dataDir, 0755); err != nil {
+	if err := os.MkdirAll(db.dataDir, 0o755); err != nil {
 		return err
 	}
 
@@ -295,4 +295,80 @@ func (db *StrataGo) flushWorker() {
 			fmt.Printf("Background flush failed: %v\n", err)
 		}
 	}
+}
+
+// ScanAll captures a point-in-time snapshot of the entire database state.
+// It iterates from oldest to newest, allowing newer writes to overwrite older ones.
+func (db *StrataGo) ScanAll() (map[string][]byte, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	state := make(map[string][]byte)
+
+	for _, reader := range db.sstReaders {
+		iter, err := reader.NewIterator()
+		if err != nil {
+			continue
+		}
+		for iter.Next() {
+			key := make([]byte, len(iter.Key()))
+			copy(key, iter.Key())
+
+			val := make([]byte, len(iter.Value()))
+			copy(val, iter.Value())
+
+			state[string(key)] = val
+		}
+		iter.Close()
+	}
+
+	if db.immutableMemtable != nil {
+		iter := db.immutableMemtable.NewIterator()
+		for iter.Next() {
+			state[string(iter.Key())] = iter.Value()
+		}
+	}
+
+	iter := db.activeMemtable.NewIterator()
+	for iter.Next() {
+		state[string(iter.Key())] = iter.Value()
+	}
+
+	// Purge tombstones
+	finalState := make(map[string][]byte)
+	for k, v := range state {
+		if len(v) > 0 {
+			finalState[k] = v
+		}
+	}
+
+	return finalState, nil
+}
+
+// ClearAndLoad  wipes the current database and ingests a new state
+// from a network snapshot stream
+func (db *StrataGo) ClearAndLoad(r io.Reader) error {
+	if err := db.Purge(); err != nil {
+		return fmt.Errorf("failed to purge existing database: %w", err)
+	}
+
+	// Decode the incoming snapshot stream
+	var incomingState map[string][]byte
+	decoder := json.NewDecoder(r)
+	if err := decoder.Decode(&incomingState); err != nil {
+		return fmt.Errorf("failed to decode snapshot stream: %w", err)
+	}
+
+	// Ingest the new state into the clean engine
+	for k, v := range incomingState {
+		if err := db.Put([]byte(k), v); err != nil {
+			return fmt.Errorf("failed to ingest key %s: %w", k, err)
+		}
+	}
+
+	return nil
 }
