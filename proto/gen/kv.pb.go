@@ -74,6 +74,52 @@ func (GetRequest_ConsistencyLevel) EnumDescriptor() ([]byte, []int) {
 	return file_kv_proto_rawDescGZIP(), []int{2, 0}
 }
 
+type Command_Operation int32
+
+const (
+	Command_PUT    Command_Operation = 0
+	Command_DELETE Command_Operation = 1
+)
+
+// Enum value maps for Command_Operation.
+var (
+	Command_Operation_name = map[int32]string{
+		0: "PUT",
+		1: "DELETE",
+	}
+	Command_Operation_value = map[string]int32{
+		"PUT":    0,
+		"DELETE": 1,
+	}
+)
+
+func (x Command_Operation) Enum() *Command_Operation {
+	p := new(Command_Operation)
+	*p = x
+	return p
+}
+
+func (x Command_Operation) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Command_Operation) Descriptor() protoreflect.EnumDescriptor {
+	return file_kv_proto_enumTypes[1].Descriptor()
+}
+
+func (Command_Operation) Type() protoreflect.EnumType {
+	return &file_kv_proto_enumTypes[1]
+}
+
+func (x Command_Operation) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Command_Operation.Descriptor instead.
+func (Command_Operation) EnumDescriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{6, 0}
+}
+
 // PutRequest contains the key and value to be stored
 type PutRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -413,6 +459,120 @@ func (x *DeleteResponse) GetLeaderAddress() string {
 	return ""
 }
 
+// Internal Raft Command for the FSM log
+type Command struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Op            Command_Operation      `protobuf:"varint,1,opt,name=op,proto3,enum=kv.Command_Operation" json:"op,omitempty"`
+	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Value         []byte                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Command) Reset() {
+	*x = Command{}
+	mi := &file_kv_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Command) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Command) ProtoMessage() {}
+
+func (x *Command) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Command.ProtoReflect.Descriptor instead.
+func (*Command) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *Command) GetOp() Command_Operation {
+	if x != nil {
+		return x.Op
+	}
+	return Command_PUT
+}
+
+func (x *Command) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *Command) GetValue() []byte {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+// Internal Snapshot payload for streaming state transfers
+type KVEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KVEntry) Reset() {
+	*x = KVEntry{}
+	mi := &file_kv_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KVEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KVEntry) ProtoMessage() {}
+
+func (x *KVEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_kv_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KVEntry.ProtoReflect.Descriptor instead.
+func (*KVEntry) Descriptor() ([]byte, []int) {
+	return file_kv_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *KVEntry) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *KVEntry) GetValue() []byte {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
 var File_kv_proto protoreflect.FileDescriptor
 
 const file_kv_proto_rawDesc = "" +
@@ -443,7 +603,18 @@ const file_kv_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\"Q\n" +
 	"\x0eDeleteResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12%\n" +
-	"\x0eleader_address\x18\x02 \x01(\tR\rleaderAddress2\x90\x01\n" +
+	"\x0eleader_address\x18\x02 \x01(\tR\rleaderAddress\"z\n" +
+	"\aCommand\x12%\n" +
+	"\x02op\x18\x01 \x01(\x0e2\x15.kv.Command.OperationR\x02op\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\fR\x05value\" \n" +
+	"\tOperation\x12\a\n" +
+	"\x03PUT\x10\x00\x12\n" +
+	"\n" +
+	"\x06DELETE\x10\x01\"1\n" +
+	"\aKVEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value2\x90\x01\n" +
 	"\aKVStore\x12(\n" +
 	"\x03Put\x12\x0e.kv.PutRequest\x1a\x0f.kv.PutResponse\"\x00\x12(\n" +
 	"\x03Get\x12\x0e.kv.GetRequest\x1a\x0f.kv.GetResponse\"\x00\x121\n" +
@@ -461,30 +632,34 @@ func file_kv_proto_rawDescGZIP() []byte {
 	return file_kv_proto_rawDescData
 }
 
-var file_kv_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_kv_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_kv_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_kv_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_kv_proto_goTypes = []any{
 	(GetRequest_ConsistencyLevel)(0), // 0: kv.GetRequest.ConsistencyLevel
-	(*PutRequest)(nil),               // 1: kv.PutRequest
-	(*PutResponse)(nil),              // 2: kv.PutResponse
-	(*GetRequest)(nil),               // 3: kv.GetRequest
-	(*GetResponse)(nil),              // 4: kv.GetResponse
-	(*DeleteRequest)(nil),            // 5: kv.DeleteRequest
-	(*DeleteResponse)(nil),           // 6: kv.DeleteResponse
+	(Command_Operation)(0),           // 1: kv.Command.Operation
+	(*PutRequest)(nil),               // 2: kv.PutRequest
+	(*PutResponse)(nil),              // 3: kv.PutResponse
+	(*GetRequest)(nil),               // 4: kv.GetRequest
+	(*GetResponse)(nil),              // 5: kv.GetResponse
+	(*DeleteRequest)(nil),            // 6: kv.DeleteRequest
+	(*DeleteResponse)(nil),           // 7: kv.DeleteResponse
+	(*Command)(nil),                  // 8: kv.Command
+	(*KVEntry)(nil),                  // 9: kv.KVEntry
 }
 var file_kv_proto_depIdxs = []int32{
 	0, // 0: kv.GetRequest.consistency:type_name -> kv.GetRequest.ConsistencyLevel
-	1, // 1: kv.KVStore.Put:input_type -> kv.PutRequest
-	3, // 2: kv.KVStore.Get:input_type -> kv.GetRequest
-	5, // 3: kv.KVStore.Delete:input_type -> kv.DeleteRequest
-	2, // 4: kv.KVStore.Put:output_type -> kv.PutResponse
-	4, // 5: kv.KVStore.Get:output_type -> kv.GetResponse
-	6, // 6: kv.KVStore.Delete:output_type -> kv.DeleteResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1, // 1: kv.Command.op:type_name -> kv.Command.Operation
+	2, // 2: kv.KVStore.Put:input_type -> kv.PutRequest
+	4, // 3: kv.KVStore.Get:input_type -> kv.GetRequest
+	6, // 4: kv.KVStore.Delete:input_type -> kv.DeleteRequest
+	3, // 5: kv.KVStore.Put:output_type -> kv.PutResponse
+	5, // 6: kv.KVStore.Get:output_type -> kv.GetResponse
+	7, // 7: kv.KVStore.Delete:output_type -> kv.DeleteResponse
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_kv_proto_init() }
@@ -497,8 +672,8 @@ func file_kv_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kv_proto_rawDesc), len(file_kv_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   6,
+			NumEnums:      2,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

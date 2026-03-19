@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	pb "github.com/thomazdavis/stratago-dist/proto/gen"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
 
 type KVServer struct {
@@ -112,15 +112,15 @@ func (s *KVServer) Put(ctx context.Context, req *pb.PutRequest) (*pb.PutResponse
 	}
 
 	// Event payload
-	event := map[string]interface{}{
-		"op":    "put",
-		"key":   req.Key,
-		"value": req.Value,
+	cmd := &pb.Command{
+		Op:    pb.Command_PUT,
+		Key:   req.Key,
+		Value: req.Value,
 	}
 
-	eventBytes, err := json.Marshal(event)
+	eventBytes, err := proto.Marshal(cmd)
 	if err != nil {
-		return nil, err
+		return &pb.PutResponse{Success: false, Message: fmt.Sprintf("failed to marshal command: %v", err)}, nil
 	}
 
 	// Propose the write to the raft cluster
@@ -180,13 +180,14 @@ func (s *KVServer) Delete(ctx context.Context, req *pb.DeleteRequest) (*pb.Delet
 		return client.Delete(ctx, req)
 	}
 
-	event := map[string]interface{}{
-		"op":  "delete",
-		"key": req.Key,
+	cmd := &pb.Command{
+		Op:  pb.Command_DELETE,
+		Key: req.Key,
 	}
-	eventBytes, err := json.Marshal(event)
+
+	eventBytes, err := proto.Marshal(cmd)
 	if err != nil {
-		return &pb.DeleteResponse{Success: false, LeaderAddress: string(s.Raft.Leader())}, err
+		return &pb.DeleteResponse{Success: false, LeaderAddress: string(s.Raft.Leader())}, fmt.Errorf("failed to marshal command: %w", err)
 	}
 
 	applyFuture := s.Raft.Apply(eventBytes, 5*time.Second)

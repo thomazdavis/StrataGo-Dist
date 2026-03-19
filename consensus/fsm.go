@@ -1,12 +1,14 @@
 package consensus
 
 import (
-	"encoding/json"
+	"encoding/binary"
 	"fmt"
 	"io"
 
 	"github.com/hashicorp/raft"
 	engine "github.com/thomazdavis/stratago-dist/engine"
+	pb "github.com/thomazdavis/stratago-dist/proto/gen"
+	"google.golang.org/protobuf/proto"
 )
 
 type Event struct {
@@ -25,18 +27,18 @@ func NewStrataFSM(db *engine.StrataGo) *StrataFSM {
 
 // Apply is invoked by Raft once a log entry is committed by a quorum of nodes
 func (f *StrataFSM) Apply(l *raft.Log) interface{} {
-	var e Event
-	if err := json.Unmarshal(l.Data, &e); err != nil {
-		return fmt.Errorf("failed to unmarshal Raft log: %w", err)
+	var cmd pb.Command
+	if err := proto.Unmarshal(l.Data, &cmd); err != nil {
+		return fmt.Errorf("failed to unmarshal Raft command: %w", err)
 	}
 
-	switch e.Op {
-	case "put":
-		return f.db.Put([]byte(e.Key), e.Value)
-	case "delete":
-		return f.db.Delete([]byte(e.Key))
+	switch cmd.Op {
+	case pb.Command_PUT:
+		return f.db.Put([]byte(cmd.Key), cmd.Value)
+	case pb.Command_DELETE:
+		return f.db.Delete([]byte(cmd.Key))
 	default:
-		return fmt.Errorf("unknown operation: %s", e.Op)
+		return fmt.Errorf("unknown operation: %v", cmd.Op)
 	}
 }
 
@@ -50,13 +52,41 @@ func (f *StrataFSM) Snapshot() (raft.FSMSnapshot, error) {
 	return &strataSnapshot{state: state}, nil
 }
 
-// Restore is used when a node wakes up and needs to load a snapshot to catch up.
+// Restore streams length-prefixed Protobufs to rebuild the database
 func (f *StrataFSM) Restore(rc io.ReadCloser) error {
 	defer rc.Close()
 
-	// Pass the network stream directly to the engine to wipe and reload
-	if err := f.db.ClearAndLoad(rc); err != nil {
-		return fmt.Errorf("failed to restore from snapshot: %w", err)
+	// Wipe the current local state
+	if err := f.db.Purge(); err != nil {
+		return fmt.Errorf("failed to purge engine before restore: %w", err)
+	}
+
+	// Decode the length-prefixed binary stream
+	for {
+		// Read the 4-byte size header
+		var length uint32
+		if err := binary.Read(rc, binary.LittleEndian, &length); err != nil {
+			if err == io.EOF {
+				break // End of snapshot stream
+			}
+			return fmt.Errorf("failed to read snapshot length prefix: %w", err)
+		}
+
+		// Read the exact bytes for this specific KVEntry
+		buf := make([]byte, length)
+		if _, err := io.ReadFull(rc, buf); err != nil {
+			return fmt.Errorf("failed to read snapshot payload: %w", err)
+		}
+
+		// Unmarshal and apply to the clean engine
+		var entry pb.KVEntry
+		if err := proto.Unmarshal(buf, &entry); err != nil {
+			return fmt.Errorf("failed to unmarshal snapshot entry: %w", err)
+		}
+
+		if err := f.db.Put([]byte(entry.Key), entry.Value); err != nil {
+			return fmt.Errorf("failed to ingest restored key %s: %w", entry.Key, err)
+		}
 	}
 
 	return nil
@@ -70,10 +100,24 @@ type strataSnapshot struct {
 // It encodes our map into a byte stream and writes it to the hard drive (snapshotStore)
 func (s *strataSnapshot) Persist(sink raft.SnapshotSink) error {
 	err := func() error {
-		// Encode the in-memory map to JSON directly into the file sink
-		encoder := json.NewEncoder(sink)
-		if err := encoder.Encode(s.state); err != nil {
-			return err
+		for k, v := range s.state {
+			entry := &pb.KVEntry{
+				Key:   k,
+				Value: v,
+			}
+			data, err := proto.Marshal(entry)
+			if err != nil {
+				return err
+			}
+
+			// Write 4-byte size header
+			if err := binary.Write(sink, binary.LittleEndian, uint32(len(data))); err != nil {
+				return err
+			}
+			// Write the Protobuf payload
+			if _, err := sink.Write(data); err != nil {
+				return err
+			}
 		}
 		return sink.Close()
 	}()

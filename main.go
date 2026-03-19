@@ -46,14 +46,32 @@ func main() {
 	fsm := consensus.NewStrataFSM(db)
 
 	// Configure Raft Storage (Logs, Stable Info, and Snapshots)
-	logStore, _ := raftboltdb.NewBoltStore(filepath.Join(dataDir, "raft-log.bolt"))
-	stableStore, _ := raftboltdb.NewBoltStore(filepath.Join(dataDir, "raft-stable.bolt"))
-	snapshotStore, _ := raft.NewFileSnapshotStore(dataDir, 1, os.Stderr)
+	logStore, err := raftboltdb.NewBoltStore(filepath.Join(dataDir, "raft-log.bolt"))
+	if err != nil {
+		log.Fatalf("Failed to create Raft log store: %v", err)
+	}
+
+	stableStore, err := raftboltdb.NewBoltStore(filepath.Join(dataDir, "raft-stable.bolt"))
+	if err != nil {
+		log.Fatalf("Failed to create Raft stable store: %v", err)
+	}
+
+	snapshotStore, err := raft.NewFileSnapshotStore(dataDir, 1, os.Stderr)
+	if err != nil {
+		log.Fatalf("Failed to create Raft snapshot store: %v", err)
+	}
 
 	// Raft Networking
 	raftAddr := fmt.Sprintf("127.0.0.1:%d", *raftPort)
-	tcpAddr, _ := net.ResolveTCPAddr("tcp", raftAddr)
-	transport, _ := raft.NewTCPTransport(raftAddr, tcpAddr, 3, 10*time.Second, os.Stderr)
+	tcpAddr, err := net.ResolveTCPAddr("tcp", raftAddr)
+	if err != nil {
+		log.Fatalf("Failed to resolve Raft TCP address: %v", err)
+	}
+
+	transport, err := raft.NewTCPTransport(raftAddr, tcpAddr, 3, 10*time.Second, os.Stderr)
+	if err != nil {
+		log.Fatalf("Failed to create Raft TCP transport: %v", err)
+	}
 
 	// Boot the Raft Node
 	config := raft.DefaultConfig()
@@ -92,8 +110,16 @@ func main() {
 		fmt.Printf("[%s] Bootstrapped new Raft cluster.\n", *nodeID)
 	} else {
 		// Join an existing cluster via the Leader's HTTP Management API
-		host, portStr, _ := net.SplitHostPort(*joinAddr)
-		leaderRaftPort, _ := strconv.Atoi(portStr)
+		host, portStr, err := net.SplitHostPort(*joinAddr)
+		if err != nil {
+			log.Fatalf("Invalid join address format. Expected host:port, got '%s': %v", *joinAddr, err)
+		}
+
+		leaderRaftPort, err := strconv.Atoi(portStr)
+		if err != nil {
+			log.Fatalf("Invalid port in join address '%s': %v", *joinAddr, err)
+		}
+
 		leaderHttpPort := leaderRaftPort + 2000
 
 		joinURL := fmt.Sprintf("http://%s:%d/join?id=%s&addr=%s", host, leaderHttpPort, *nodeID, raftAddr)

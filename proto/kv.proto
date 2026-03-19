@@ -8,10 +8,10 @@ option go_package = "github.com/thomazdavis/stratago-dist/proto/gen";
 service KVStore {
   // Put inserts or updates a key-value pair in the database
   rpc Put (PutRequest) returns (PutResponse) {}
-  
+
   // Get retrieves a value by its key, subject to the requested consistency level
   rpc Get (GetRequest) returns (GetResponse) {}
-  
+
   // Delete removes a key-value pair from the database
   rpc Delete (DeleteRequest) returns (DeleteResponse) {}
 }
@@ -31,22 +31,22 @@ message PutResponse {
   // Optional message, typically containing an error description if success is false
   string message = 2;
   // The address of the current leader, provided if the receiving node is a follower
-  string leader_address = 3; 
+  string leader_address = 3;
 }
 
 // GetRequest contains the key to retrieve and the desired consistency level
 message GetRequest {
   // The key to look up
   string key = 1;
-  
+
   // ConsistencyLevel dictates the strictness of the read operation
   enum ConsistencyLevel {
     // STRONG requires a quorum check Slow but guaranteed safe against network partitions
-    STRONG = 0;   
+    STRONG = 0;
     // FAST utilizes Leader Leases Served locally by the leader; fast but relies on bounded clock drift
-    FAST = 1;     
+    FAST = 1;
     // EVENTUAL allows reads from follower nodes Maximum throughput, but risks returning stale data
-    EVENTUAL = 2; 
+    EVENTUAL = 2;
   }
   // The consistency level requested by the client
   ConsistencyLevel consistency = 2;
@@ -74,4 +74,21 @@ message DeleteResponse {
   bool success = 1;
   // The address of the current leader, provided if the receiving node is a follower
   string leader_address = 2;
+}
+
+// Internal Raft Command for the FSM log
+message Command {
+  enum Operation {
+    PUT    = 0;
+    DELETE = 1;
+  }
+  Operation op    = 1;
+  string    key   = 2;
+  bytes     value = 3;
+}
+
+// Internal Snapshot payload for streaming state transfers
+message KVEntry {
+  string key   = 1;
+  bytes  value = 2;
 }

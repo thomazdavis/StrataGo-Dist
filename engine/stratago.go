@@ -1,9 +1,7 @@
 package stratago
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -347,28 +345,4 @@ func (db *StrataGo) ScanAll() (map[string][]byte, error) {
 	}
 
 	return finalState, nil
-}
-
-// ClearAndLoad  wipes the current database and ingests a new state
-// from a network snapshot stream
-func (db *StrataGo) ClearAndLoad(r io.Reader) error {
-	if err := db.Purge(); err != nil {
-		return fmt.Errorf("failed to purge existing database: %w", err)
-	}
-
-	// Decode the incoming snapshot stream
-	var incomingState map[string][]byte
-	decoder := json.NewDecoder(r)
-	if err := decoder.Decode(&incomingState); err != nil {
-		return fmt.Errorf("failed to decode snapshot stream: %w", err)
-	}
-
-	// Ingest the new state into the clean engine
-	for k, v := range incomingState {
-		if err := db.Put([]byte(k), v); err != nil {
-			return fmt.Errorf("failed to ingest key %s: %w", k, err)
-		}
-	}
-
-	return nil
 }
