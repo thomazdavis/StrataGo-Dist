@@ -160,3 +160,51 @@ func TestKVServer_ConnectionCaching(t *testing.T) {
 	conn3 := kvServer.leaderConn
 	assert.NotEqual(t, conn1, conn3, "Stale connection was not purged after leader change")
 }
+
+// BenchmarkReadConsistency tests the latency and throughput difference
+// between quorum reads and lease-based local reads
+func BenchmarkReadConsistency(b *testing.B) {
+	_, client, cleanup := setupSingleNodeCluster(&testing.T{})
+	defer cleanup()
+
+	ctx := context.Background()
+	testKey := "bench_key"
+	testVal := []byte("bench_value_data")
+
+	_, err := client.Put(ctx, &pb.PutRequest{Key: testKey, Value: testVal})
+	if err != nil {
+		b.Fatalf("Failed to seed database: %v", err)
+	}
+
+	// Benchmark STRONG Consistency (Quorum/Barrier)
+	b.Run("STRONG_Consistency", func(b *testing.B) {
+		b.ResetTimer()
+		b.RunParallel(func(p *testing.PB) {
+			for p.Next() {
+				resp, err := client.Get(ctx, &pb.GetRequest{
+					Key:         testKey,
+					Consistency: pb.GetRequest_STRONG,
+				})
+				if err != nil || !resp.Found {
+					b.Error("STRONG read failed")
+				}
+			}
+		})
+	})
+
+	// Benchmark FAST Consistency (Leader Lease)
+	b.Run("FAST_Consistency", func(b *testing.B) {
+		b.ResetTimer()
+		b.RunParallel(func(p *testing.PB) {
+			for p.Next() {
+				resp, err := client.Get(ctx, &pb.GetRequest{
+					Key:         testKey,
+					Consistency: pb.GetRequest_FAST,
+				})
+				if err != nil || !resp.Found {
+					b.Error("FAST read failed")
+				}
+			}
+		})
+	})
+}
