@@ -12,7 +12,9 @@ import (
 	engine "github.com/thomazdavis/stratago-dist/engine"
 	pb "github.com/thomazdavis/stratago-dist/proto/gen"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -148,13 +150,21 @@ func (s *KVServer) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse
 	case pb.GetRequest_STRONG:
 		// Requires a network round-trip to verify leadership with the quorum
 		if err := s.Raft.VerifyLeader().Error(); err != nil {
-			return nil, fmt.Errorf("stale read prevented: not the leader")
+			leaderAddr := string(s.Raft.Leader())
+			if leaderAddr == "" {
+				leaderAddr = "unknown"
+			}
+			return nil, status.Errorf(codes.FailedPrecondition, "stale read prevented: not the leader (leader: %s)", leaderAddr)
 		}
 
 	case pb.GetRequest_FAST:
 		// Zero network hops, fast but relies on bounded clock drift
 		if s.Raft.State() != raft.Leader {
-			return nil, fmt.Errorf("not the leader")
+			leaderAddr := string(s.Raft.Leader())
+			if leaderAddr == "" {
+				leaderAddr = "unknown"
+			}
+			return nil, status.Errorf(codes.FailedPrecondition, "not the leader (leader: %s)", leaderAddr)
 		}
 
 	case pb.GetRequest_EVENTUAL:
