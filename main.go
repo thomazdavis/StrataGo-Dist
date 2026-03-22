@@ -20,6 +20,7 @@ import (
 	pb "github.com/thomazdavis/stratago-dist/proto/gen"
 	"github.com/thomazdavis/stratago-dist/server"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -27,6 +28,7 @@ func main() {
 	nodeID := flag.String("node-id", "node1", "Unique ID for this node")
 	raftPort := flag.Int("raft-port", 7001, "Port for Raft consensus protocol")
 	grpcPort := flag.Int("grpc-port", 8001, "Port for gRPC client connections")
+	raftHost := flag.String("raft-host", "127.0.0.1", "Hostname/IP that other nodes use to reach this node")
 	joinAddr := flag.String("join-addr", "", "Raft address of the leader to join")
 	flag.Parse()
 
@@ -62,13 +64,16 @@ func main() {
 	}
 
 	// Raft Networking
-	raftAddr := fmt.Sprintf("127.0.0.1:%d", *raftPort)
-	tcpAddr, err := net.ResolveTCPAddr("tcp", raftAddr)
+	// raftAddr := fmt.Sprintf("127.0.0.1:%d", *raftPort)
+	bindAddr := fmt.Sprintf("0.0.0.0:%d", *raftPort)
+	advertiseAddr := fmt.Sprintf("%s:%d", *raftHost, *raftPort)
+
+	tcpAddr, err := net.ResolveTCPAddr("tcp", advertiseAddr)
 	if err != nil {
 		log.Fatalf("Failed to resolve Raft TCP address: %v", err)
 	}
 
-	transport, err := raft.NewTCPTransport(raftAddr, tcpAddr, 3, 10*time.Second, os.Stderr)
+	transport, err := raft.NewTCPTransport(bindAddr, tcpAddr, 3, 10*time.Second, os.Stderr)
 	if err != nil {
 		log.Fatalf("Failed to create Raft TCP transport: %v", err)
 	}
@@ -83,6 +88,12 @@ func main() {
 
 	// Hidden HTTP server for automated cluster joining; Management API
 	httpPort := *raftPort + 2000
+
+	// status endpoint for Docker/Kubernetes healthchecks
+	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
 	http.HandleFunc("/join", func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("id")
 		addr := r.URL.Query().Get("addr")
@@ -104,7 +115,7 @@ func main() {
 	if *joinAddr == "" {
 		// Seed node bootstraps the cluster
 		configuration := raft.Configuration{
-			Servers: []raft.Server{{ID: config.LocalID, Address: transport.LocalAddr()}},
+			Servers: []raft.Server{{ID: config.LocalID, Address: raft.ServerAddress(advertiseAddr)}},
 		}
 		raftNode.BootstrapCluster(configuration)
 		fmt.Printf("[%s] Bootstrapped new Raft cluster.\n", *nodeID)
@@ -122,7 +133,7 @@ func main() {
 
 		leaderHttpPort := leaderRaftPort + 2000
 
-		joinURL := fmt.Sprintf("http://%s:%d/join?id=%s&addr=%s", host, leaderHttpPort, *nodeID, raftAddr)
+		joinURL := fmt.Sprintf("http://%s:%d/join?id=%s&addr=%s", host, leaderHttpPort, *nodeID, advertiseAddr)
 
 		go func() {
 			for {
@@ -145,6 +156,8 @@ func main() {
 	grpcServer := grpc.NewServer()
 	kvServer := server.NewKVServer(raftNode, db)
 	pb.RegisterKVStoreServer(grpcServer, kvServer)
+
+	reflection.Register(grpcServer)
 
 	fmt.Printf("\n Node '%s' is LIVE\n", *nodeID)
 	fmt.Printf("   Raft Port: %d | gRPC Port: %d | Admin Port: %d\n\n", *raftPort, *grpcPort, httpPort)

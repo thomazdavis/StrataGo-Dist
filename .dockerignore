@@ -1,0 +1,12 @@
+# Data directories
+data/
+*.bolt
+*.snap
+
+# Git and IDE
+.git/
+.vscode/
+
+# Go build artifacts
+bin/
+stratago

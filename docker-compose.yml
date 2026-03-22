@@ -1,0 +1,69 @@
+services:
+  node1:
+    build: .
+    container_name: stratago-node1
+    command: ["-node-id", "node1", 
+            "-raft-port", "17001", 
+            "-grpc-port", "18001",
+            "-raft-host", "node1"]
+    ports:
+      - "18001:18001" # gRPC
+      - "19001:19001" # HTTP management
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:19001/status"]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+    networks:
+      - strata-net
+    volumes:
+      - strata-data-1:/app/data
+
+  node2:
+    build: .
+    container_name: stratago-node2
+    command: ["-node-id", "node2", 
+            "-raft-port", "17002", 
+            "-grpc-port", "18002",
+            "-raft-host", "node2",
+            "-join-addr", "node1:17001"]
+    ports:
+      - "18002:18002"
+      - "19002:19002"
+    depends_on:
+      node1:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - strata-net
+    volumes:
+      - strata-data-2:/app/data
+
+  node3:
+    build: .
+    container_name: stratago-node3
+    command: ["-node-id", "node3", 
+            "-raft-port", "17003", 
+            "-grpc-port", "18003",
+            "-raft-host", "node3",    
+            "-join-addr", "node1:17001"]
+    ports:
+      - "18003:18003"
+      - "19003:19003"
+    depends_on:
+      node1:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - strata-net
+    volumes:
+      - strata-data-3:/app/data
+
+networks:
+  strata-net:
+    driver: bridge
+
+volumes:
+  strata-data-1:
+  strata-data-2:
+  strata-data-3:
