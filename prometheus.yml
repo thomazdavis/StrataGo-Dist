@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "stratago-cluster"
+    # We use the internal Docker DNS names and the raftPort + 3000 convention
+    static_configs:
+      - targets: ["node1:20001", "node2:20002", "node3:20003"]

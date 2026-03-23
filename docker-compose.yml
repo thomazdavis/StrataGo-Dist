@@ -9,6 +9,7 @@ services:
     ports:
       - "18001:18001" # gRPC
       - "19001:19001" # HTTP management
+      - "20001:20001" # Prometheus metrics
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:19001/status"]
       interval: 2s
@@ -30,6 +31,7 @@ services:
     ports:
       - "18002:18002"
       - "19002:19002"
+      - "20002:20002" # Prometheus metrics
     depends_on:
       node1:
         condition: service_healthy
@@ -50,6 +52,7 @@ services:
     ports:
       - "18003:18003"
       - "19003:19003"
+      - "20003:20003" # Prometheus metrics
     depends_on:
       node1:
         condition: service_healthy
@@ -58,6 +61,28 @@ services:
       - strata-net
     volumes:
       - strata-data-3:/app/data
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: stratago-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - strata-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: stratago-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - strata-net
+    depends_on:
+      - prometheus
 
 networks:
   strata-net:

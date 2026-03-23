@@ -9,6 +9,7 @@ import (
 	"github.com/thomazdavis/stratago-dist/engine/memtable"
 	"github.com/thomazdavis/stratago-dist/engine/sstable"
 	"github.com/thomazdavis/stratago-dist/engine/wal"
+	"github.com/thomazdavis/stratago-dist/metrics"
 )
 
 func (db *StrataGo) Flush() error {
@@ -90,6 +91,10 @@ func (db *StrataGo) Flush() error {
 	db.sstReaders = append(db.sstReaders, reader)
 	db.immutableMemtable = nil
 	db.mu.Unlock()
+
+	// Record the flush in Prometheus (Sawtooth graph drop)
+	metrics.SSTableCount.WithLabelValues(metrics.NodeID).Inc()
+	metrics.MemtableSizeBytes.WithLabelValues(metrics.NodeID).Set(float64(db.activeMemtable.SizeBytes))
 
 	os.Remove(filepath.Join(db.dataDir, "wal.log.flushing"))
 	return nil

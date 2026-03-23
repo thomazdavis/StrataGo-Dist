@@ -15,8 +15,10 @@ import (
 
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/thomazdavis/stratago-dist/consensus"
 	engine "github.com/thomazdavis/stratago-dist/engine"
+	"github.com/thomazdavis/stratago-dist/metrics"
 	pb "github.com/thomazdavis/stratago-dist/proto/gen"
 	"github.com/thomazdavis/stratago-dist/server"
 	"google.golang.org/grpc"
@@ -31,6 +33,8 @@ func main() {
 	raftHost := flag.String("raft-host", "127.0.0.1", "Hostname/IP that other nodes use to reach this node")
 	joinAddr := flag.String("join-addr", "", "Raft address of the leader to join")
 	flag.Parse()
+
+	metrics.NodeID = *nodeID
 
 	// Setup the data directory and
 	// initialize the storage enginer for this specific node
@@ -159,14 +163,47 @@ func main() {
 
 	reflection.Register(grpcServer)
 
-	fmt.Printf("\n Node '%s' is LIVE\n", *nodeID)
-	fmt.Printf("   Raft Port: %d | gRPC Port: %d | Admin Port: %d\n\n", *raftPort, *grpcPort, httpPort)
-
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("gRPC Server crashed: %v", err)
 		}
 	}()
+
+	// Prometheus Instrumentation
+	metricsPort := *raftPort + 3000
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", metricsPort), mux); err != nil {
+			fmt.Printf("Metrics server failed: %v\n", err)
+		}
+	}()
+
+	go func() {
+		lastState := raft.Follower
+		for {
+			currentState := raftNode.State()
+			val := 0.0
+
+			switch currentState {
+			case raft.Candidate:
+				val = 1.0
+				if lastState != raft.Candidate {
+					metrics.ElectionTotal.WithLabelValues(metrics.NodeID).Inc()
+				}
+			case raft.Leader:
+				val = 2.0
+			}
+
+			metrics.RaftState.WithLabelValues(metrics.NodeID).Set(val)
+			lastState = currentState
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
+
+	fmt.Printf("\n Node '%s' is LIVE\n", *nodeID)
+	fmt.Printf("   Raft Port: %d | gRPC Port: %d | Admin Port: %d | Metrics Port: %d\n\n",
+		*raftPort, *grpcPort, httpPort, metricsPort)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

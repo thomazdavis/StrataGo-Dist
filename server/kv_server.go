@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	engine "github.com/thomazdavis/stratago-dist/engine"
+	"github.com/thomazdavis/stratago-dist/metrics"
 	pb "github.com/thomazdavis/stratago-dist/proto/gen"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -103,6 +104,12 @@ func (s *KVServer) getLeaderClient() (pb.KVStoreClient, error) {
 }
 
 func (s *KVServer) Put(ctx context.Context, req *pb.PutRequest) (*pb.PutResponse, error) {
+	start := time.Now()
+	defer func() {
+		metrics.RequestDuration.WithLabelValues(metrics.NodeID, "Put", "N/A").Observe(time.Since(start).Seconds())
+		metrics.RequestsTotal.WithLabelValues(metrics.NodeID, "Put").Inc()
+	}()
+
 	// Reject writes if this node is not the leader
 	if s.Raft.State() != raft.Leader {
 		client, err := s.getLeaderClient()
@@ -146,6 +153,12 @@ func (s *KVServer) Put(ctx context.Context, req *pb.PutRequest) (*pb.PutResponse
 
 // Get handles read requests with Tunable Consistency
 func (s *KVServer) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
+	start := time.Now()
+	defer func() {
+		metrics.RequestDuration.WithLabelValues(metrics.NodeID, "Get", req.Consistency.String()).Observe(time.Since(start).Seconds())
+		metrics.RequestsTotal.WithLabelValues(metrics.NodeID, "Get").Inc()
+	}()
+
 	switch req.Consistency {
 	case pb.GetRequest_STRONG:
 		// Requires a network round-trip to verify leadership with the quorum
@@ -182,6 +195,12 @@ func (s *KVServer) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse
 }
 
 func (s *KVServer) Delete(ctx context.Context, req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
+	start := time.Now()
+	defer func() {
+		metrics.RequestDuration.WithLabelValues(metrics.NodeID, "Delete", "N/A").Observe(time.Since(start).Seconds())
+		metrics.RequestsTotal.WithLabelValues(metrics.NodeID, "Delete").Inc()
+	}()
+
 	if s.Raft.State() != raft.Leader {
 		client, err := s.getLeaderClient()
 		if err != nil {

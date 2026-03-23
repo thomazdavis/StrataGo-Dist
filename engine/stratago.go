@@ -11,6 +11,7 @@ import (
 	"github.com/thomazdavis/stratago-dist/engine/memtable"
 	"github.com/thomazdavis/stratago-dist/engine/sstable"
 	"github.com/thomazdavis/stratago-dist/engine/wal"
+	"github.com/thomazdavis/stratago-dist/metrics"
 )
 
 const DefaultMemtableThreshold = 4 * 1024 * 1024 // 4MB
@@ -120,6 +121,8 @@ func Open(dataDir string) (*StrataGo, error) {
 	go db.flushWorker()
 	go db.compactionWorker()
 
+	metrics.SSTableCount.WithLabelValues(metrics.NodeID).Set(float64(len(readers)))
+
 	return db, nil
 }
 
@@ -137,6 +140,9 @@ func (db *StrataGo) Put(key, value []byte) error {
 
 	db.mu.Lock()
 	db.activeMemtable.Put(key, value)
+
+	// Prometheus Memtable gauge
+	metrics.MemtableSizeBytes.WithLabelValues(metrics.NodeID).Set(float64(db.activeMemtable.SizeBytes))
 
 	needsFlush := db.activeMemtable.SizeBytes >= DefaultMemtableThreshold
 
