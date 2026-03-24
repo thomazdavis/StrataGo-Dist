@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/thomazdavis/stratago-dist/engine/sstable"
+	"github.com/thomazdavis/stratago-dist/metrics"
 )
 
 const CompactionThreshold = 4
@@ -48,7 +49,7 @@ func getTier(size int64) int {
 // RunCompaction executes a Size-Tiered compaction job
 func (db *StrataGo) RunCompaction() error {
 	// Select the files
-	filesToCompact, startIndex, currentTier := db.selectFilesForCompaction()
+	filesToCompact, currentTier := db.selectFilesForCompaction()
 
 	// If we didn't find any valid group, abort gracefully
 	if len(filesToCompact) == 0 {
@@ -87,12 +88,39 @@ func (db *StrataGo) RunCompaction() error {
 	}
 
 	db.mu.Lock()
-	newReaders := make([]*sstable.Reader, 0, len(db.sstReaders)-CompactionThreshold+1)
-	newReaders = append(newReaders, db.sstReaders[:startIndex]...)
-	newReaders = append(newReaders, newReader)
-	newReaders = append(newReaders, db.sstReaders[startIndex+CompactionThreshold:]...)
+
+	// Lookup map of the exact memory pointers just merged
+	compactedMap := make(map[*sstable.Reader]bool)
+	for _, r := range filesToCompact {
+		compactedMap[r] = true
+	}
+
+	// Rebuild the new array
+	var newReaders []*sstable.Reader
+	inserted := false
+
+	for _, reader := range db.sstReaders {
+		if compactedMap[reader] {
+			// Insert the newly merged file exactly where the old block started to preserve time-series order.
+			if !inserted {
+				newReaders = append(newReaders, newReader)
+				inserted = true
+			}
+			continue
+		}
+		newReaders = append(newReaders, reader)
+	}
+
 	db.sstReaders = newReaders
+
+	// Update the Prometheus Gauge to reflect the deleted files
+	metrics.SSTableCount.WithLabelValues(metrics.NodeID).Set(float64(len(db.sstReaders)))
+
 	db.mu.Unlock()
+
+	for _, it := range iters {
+		it.Close()
+	}
 
 	// Delete the old files from disk
 	for _, r := range filesToCompact {
@@ -110,18 +138,16 @@ func (db *StrataGo) RunCompaction() error {
 }
 
 // selectFilesForCompaction scans the current SSTables and finds a contiguous group
-// of files in the same size tier. Returns the files, their starting index, and the tier
-func (db *StrataGo) selectFilesForCompaction() ([]*sstable.Reader, int, int) {
+// of files in the same size tier. Returns the files to compact, and the tier
+func (db *StrataGo) selectFilesForCompaction() ([]*sstable.Reader, int) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
 	var filesToCompact []*sstable.Reader
-	var startIndex int
 	currentTier := -1
 	var currentGroup []*sstable.Reader
-	var groupStartIndex int
 
-	for i, r := range db.sstReaders {
+	for _, r := range db.sstReaders {
 		stat, err := os.Stat(r.Path())
 		if err != nil {
 			continue
@@ -134,17 +160,15 @@ func (db *StrataGo) selectFilesForCompaction() ([]*sstable.Reader, int, int) {
 			// If we hit our threshold of contiguous files in the same tier
 			if len(currentGroup) == CompactionThreshold {
 				filesToCompact = currentGroup
-				startIndex = groupStartIndex
-				return filesToCompact, startIndex, currentTier
+				return filesToCompact, currentTier
 			}
 		} else {
 			// Reset the group because the tier changed
 			currentTier = tier
 			currentGroup = []*sstable.Reader{r}
-			groupStartIndex = i
 		}
 	}
 
 	// Return nil if no valid group was found
-	return nil, 0, -1
+	return nil, -1
 }

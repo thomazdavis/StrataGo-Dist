@@ -128,17 +128,15 @@ func Open(dataDir string) (*StrataGo, error) {
 
 func (db *StrataGo) Put(key, value []byte) error {
 	db.mu.Lock()
+	defer db.mu.Unlock()
 	if db.closed {
-		db.mu.Unlock()
 		return fmt.Errorf("database is closed")
 	}
-	db.mu.Unlock()
 
 	if err := db.wal.WriteEntry(key, value); err != nil {
 		return err
 	}
 
-	db.mu.Lock()
 	db.activeMemtable.Put(key, value)
 
 	// Prometheus Memtable gauge
@@ -155,7 +153,6 @@ func (db *StrataGo) Put(key, value []byte) error {
 			// Ignoring request
 		}
 	}
-	db.mu.Unlock()
 
 	return nil
 }
@@ -194,18 +191,16 @@ func (db *StrataGo) Get(key []byte) ([]byte, bool) {
 // Delete marks a key as deleted by inserting a tombstone
 func (db *StrataGo) Delete(key []byte) error {
 	db.mu.Lock()
+	defer db.mu.Unlock()
 	if db.closed {
-		db.mu.Unlock()
 		return fmt.Errorf("database is closed")
 	}
-	db.mu.Unlock()
 
 	// Writing the deletion to the WAL with value nil
 	if err := db.wal.WriteEntry(key, nil); err != nil {
 		return err
 	}
 
-	db.mu.Lock()
 	db.activeMemtable.Put(key, nil)
 
 	needsFlush := db.activeMemtable.SizeBytes >= DefaultMemtableThreshold
@@ -215,7 +210,6 @@ func (db *StrataGo) Delete(key []byte) error {
 		default:
 		}
 	}
-	db.mu.Unlock()
 
 	return nil
 }
