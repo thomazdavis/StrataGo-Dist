@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -35,6 +36,12 @@ func NewKVServer(r *raft.Raft, db *engine.StrataGo) *KVServer {
 	}
 }
 
+// isProxyRequest checks gRPC metadata to prevent Prometheus double-counting
+func isProxyRequest(ctx context.Context) bool {
+	md, ok := metadata.FromIncomingContext(ctx)
+	return ok && len(md.Get("x-stratago-proxy")) > 0
+}
+
 func getLeaderGRPCAddress(raftAddr string) (string, error) {
 	if raftAddr == "" {
 		return "", fmt.Errorf("no leader currently elected")
@@ -53,6 +60,17 @@ func getLeaderGRPCAddress(raftAddr string) (string, error) {
 	// We offset our gRPC ports by exactly 1000
 	grpcPort := raftPort + 1000
 	return fmt.Sprintf("%s:%d", host, grpcPort), nil
+}
+
+// invalidateLeader destroys the cached connection so the next proxy request forces a fresh dial
+func (s *KVServer) invalidateLeader() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.leaderConn != nil {
+		s.leaderConn.Close()
+		s.leaderConn = nil
+		s.leaderAddr = "" // Force the address mismatch on the next getLeaderClient() call
+	}
 }
 
 // getLeaderClient manages the cached gRPC connection to the current leader
@@ -105,9 +123,13 @@ func (s *KVServer) getLeaderClient() (pb.KVStoreClient, error) {
 
 func (s *KVServer) Put(ctx context.Context, req *pb.PutRequest) (*pb.PutResponse, error) {
 	start := time.Now()
+	isInternalProxy := isProxyRequest(ctx)
+
 	defer func() {
-		metrics.RequestDuration.WithLabelValues(metrics.NodeID, "Put", "N/A").Observe(time.Since(start).Seconds())
-		metrics.RequestsTotal.WithLabelValues(metrics.NodeID, "Put").Inc()
+		if !isInternalProxy {
+			metrics.RequestDuration.WithLabelValues(metrics.NodeID, "Put", "N/A").Observe(time.Since(start).Seconds())
+			metrics.RequestsTotal.WithLabelValues(metrics.NodeID, "Put").Inc()
+		}
 	}()
 
 	// Reject writes if this node is not the leader
@@ -116,8 +138,21 @@ func (s *KVServer) Put(ctx context.Context, req *pb.PutRequest) (*pb.PutResponse
 		if err != nil {
 			return &pb.PutResponse{Success: false, Message: err.Error()}, nil
 		}
+
+		proxyCtx := metadata.AppendToOutgoingContext(ctx, "x-stratago-proxy", "true")
+		detachedCtx := context.WithoutCancel(proxyCtx)
+		proxyCtxWithTimeout, cancel := context.WithTimeout(detachedCtx, 3*time.Second)
+		defer cancel()
+
 		// Act as a client and forward the exact request using the cached connection
-		return client.Put(ctx, req)
+		resp, err := client.Put(proxyCtxWithTimeout, req)
+		if err != nil {
+			// The proxy call failed (network partition, timeout, or server crash).
+			// Assume the connection is poisoned and destroy it.
+			s.invalidateLeader()
+			return &pb.PutResponse{Success: false, Message: "leader unavailable, connection reset"}, err
+		}
+		return resp, nil
 	}
 
 	// Event payload
@@ -196,9 +231,13 @@ func (s *KVServer) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse
 
 func (s *KVServer) Delete(ctx context.Context, req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
 	start := time.Now()
+	isInternalProxy := isProxyRequest(ctx)
+
 	defer func() {
-		metrics.RequestDuration.WithLabelValues(metrics.NodeID, "Delete", "N/A").Observe(time.Since(start).Seconds())
-		metrics.RequestsTotal.WithLabelValues(metrics.NodeID, "Delete").Inc()
+		if !isInternalProxy {
+			metrics.RequestDuration.WithLabelValues(metrics.NodeID, "Delete", "N/A").Observe(time.Since(start).Seconds())
+			metrics.RequestsTotal.WithLabelValues(metrics.NodeID, "Delete").Inc()
+		}
 	}()
 
 	if s.Raft.State() != raft.Leader {
@@ -206,7 +245,21 @@ func (s *KVServer) Delete(ctx context.Context, req *pb.DeleteRequest) (*pb.Delet
 		if err != nil {
 			return &pb.DeleteResponse{Success: false, LeaderAddress: string(s.Raft.Leader())}, err
 		}
-		return client.Delete(ctx, req)
+
+		proxyCtx := metadata.AppendToOutgoingContext(ctx, "x-stratago-proxy", "true")
+
+		detachedCtx := context.WithoutCancel(proxyCtx)
+		proxyCtxWithTimeout, cancel := context.WithTimeout(detachedCtx, 3*time.Second)
+		defer cancel()
+
+		resp, err := client.Delete(proxyCtxWithTimeout, req)
+		if err != nil {
+			// The proxy call failed (network partition, timeout, or server crash).
+			// Assume the connection is poisoned and destroy it.
+			s.invalidateLeader()
+			return &pb.DeleteResponse{Success: false}, err
+		}
+		return resp, nil
 	}
 
 	cmd := &pb.Command{
